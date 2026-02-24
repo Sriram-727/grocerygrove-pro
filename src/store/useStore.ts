@@ -1,14 +1,27 @@
 import { create } from 'zustand';
 import { Product, CartItem, Invoice, Worker, Agency, products as initialProducts, workers as initialWorkers, agencies as initialAgencies } from '@/data/mockData';
 
+export interface Owner {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
 interface AppState {
   // Auth
   role: 'none' | 'customer' | 'admin';
   setRole: (role: 'none' | 'customer' | 'admin') => void;
 
+  // Owners
+  owners: Owner[];
+  addOwner: (owner: Owner) => void;
+
   // Products
   products: Product[];
   updateProductStock: (productId: string, quantitySold: number) => void;
+  addProduct: (product: Product) => void;
+  restockProduct: (productId: string, quantity: number) => void;
 
   // Cart
   cart: CartItem[];
@@ -38,11 +51,21 @@ export const useStore = create<AppState>((set, get) => ({
   role: 'none',
   setRole: (role) => set({ role }),
 
+  owners: [{ name: 'Admin', email: 'admin@ugms.com', phone: '9876543200', password: 'admin123' }],
+  addOwner: (owner) => set((state) => ({ owners: [...state.owners, owner] })),
+
   products: initialProducts,
   updateProductStock: (productId, quantitySold) =>
     set((state) => ({
       products: state.products.map((p) =>
         p.id === productId ? { ...p, stock: Math.max(0, p.stock - quantitySold) } : p
+      ),
+    })),
+  addProduct: (product) => set((state) => ({ products: [...state.products, product] })),
+  restockProduct: (productId, quantity) =>
+    set((state) => ({
+      products: state.products.map((p) =>
+        p.id === productId ? { ...p, stock: p.stock + quantity } : p
       ),
     })),
 
