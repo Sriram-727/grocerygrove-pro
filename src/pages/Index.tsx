@@ -1,12 +1,124 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { motion } from "framer-motion";
+import { ShoppingCart, Shield, Store } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useStore } from "@/store/useStore";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 const Index = () => {
+  const navigate = useNavigate();
+  const setRole = useStore((s) => s.setRole);
+  const [showLogin, setShowLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const enterAsCustomer = () => {
+    setRole("customer");
+    navigate("/shop");
+  };
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email === "admin@ugms.com" && password === "admin123") {
+      setRole("admin");
+      navigate("/admin");
+    } else {
+      toast.error("Invalid credentials. Use admin@ugms.com / admin123");
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
+      <div className="max-w-4xl w-full">
+        <motion.div
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-3 mb-4">
+            <Store className="h-10 w-10 text-primary" style={{ color: "hsl(152, 55%, 45%)" }} />
+            <h1 className="text-5xl font-bold font-display" style={{ color: "hsl(0, 0%, 100%)" }}>
+              UGMS
+            </h1>
+          </div>
+          <p className="text-lg" style={{ color: "hsl(140, 15%, 70%)" }}>
+            Unified Grocery Management System
+          </p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-2 gap-8 max-w-2xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            onClick={enterAsCustomer}
+            className="group cursor-pointer rounded-2xl p-8 border border-border/20 bg-card/10 backdrop-blur-sm hover:bg-card/20 transition-all duration-300"
+          >
+            <div className="gradient-primary w-16 h-16 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <ShoppingCart className="h-8 w-8" style={{ color: "hsl(0, 0%, 100%)" }} />
+            </div>
+            <h2 className="text-2xl font-display font-bold mb-2" style={{ color: "hsl(0, 0%, 100%)" }}>
+              Customer
+            </h2>
+            <p style={{ color: "hsl(140, 15%, 65%)" }}>
+              Browse products, add to cart, and checkout — no login required.
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            onClick={() => setShowLogin(true)}
+            className="group cursor-pointer rounded-2xl p-8 border border-border/20 bg-card/10 backdrop-blur-sm hover:bg-card/20 transition-all duration-300"
+          >
+            <div className="gradient-accent w-16 h-16 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <Shield className="h-8 w-8" style={{ color: "hsl(0, 0%, 100%)" }} />
+            </div>
+            <h2 className="text-2xl font-display font-bold mb-2" style={{ color: "hsl(0, 0%, 100%)" }}>
+              Shop Owner
+            </h2>
+            <p style={{ color: "hsl(140, 15%, 65%)" }}>
+              Manage workers, inventory, suppliers, and view reports.
+            </p>
+          </motion.div>
+        </div>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="text-center mt-8 text-sm"
+          style={{ color: "hsl(140, 15%, 50%)" }}
+        >
+          Demo credentials — Email: admin@ugms.com • Password: admin123
+        </motion.p>
       </div>
+
+      <Dialog open={showLogin} onOpenChange={setShowLogin}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Shop Owner Login</DialogTitle>
+            <DialogDescription>Enter your credentials to access the admin dashboard.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdminLogin} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@ugms.com" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••" required />
+            </div>
+            <Button type="submit" className="w-full">Sign In</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
