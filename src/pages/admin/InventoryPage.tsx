@@ -1,19 +1,120 @@
+import { useState } from "react";
 import { useStore } from "@/store/useStore";
 import { motion } from "framer-motion";
-import { AlertTriangle, Package } from "lucide-react";
+import { AlertTriangle, Plus, PackagePlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 const InventoryPage = () => {
   const products = useStore((s) => s.products);
   const agencies = useStore((s) => s.agencies);
+  const addProduct = useStore((s) => s.addProduct);
+  const addAgency = useStore((s) => s.addAgency);
+  const restockProduct = useStore((s) => s.restockProduct);
 
   const lowStock = products.filter((p) => p.stock <= p.minStock);
 
+  // Add product dialog
+  const [addOpen, setAddOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newStock, setNewStock] = useState("");
+  const [newMinStock, setNewMinStock] = useState("");
+  const [newImage, setNewImage] = useState("📦");
+  const [supplierMode, setSupplierMode] = useState<"existing" | "new">("existing");
+  const [selectedAgency, setSelectedAgency] = useState("");
+  const [newAgencyName, setNewAgencyName] = useState("");
+  const [newAgencyContact, setNewAgencyContact] = useState("");
+  const [newAgencyPhone, setNewAgencyPhone] = useState("");
+  const [newAgencyEmail, setNewAgencyEmail] = useState("");
+  const [newAgencyAddress, setNewAgencyAddress] = useState("");
+
+  // Restock dialog
+  const [restockOpen, setRestockOpen] = useState(false);
+  const [restockId, setRestockId] = useState("");
+  const [restockQty, setRestockQty] = useState("");
+
+  const resetAddForm = () => {
+    setNewName(""); setNewCategory(""); setNewPrice(""); setNewStock("");
+    setNewMinStock(""); setNewImage("📦"); setSupplierMode("existing");
+    setSelectedAgency(""); setNewAgencyName(""); setNewAgencyContact("");
+    setNewAgencyPhone(""); setNewAgencyEmail(""); setNewAgencyAddress("");
+  };
+
+  const handleAddProduct = () => {
+    if (!newName || !newPrice || !newStock) {
+      toast.error("Please fill name, price and stock");
+      return;
+    }
+
+    let agencyId = selectedAgency;
+
+    if (supplierMode === "new") {
+      if (!newAgencyName || !newAgencyPhone) {
+        toast.error("Please fill supplier name and phone");
+        return;
+      }
+      agencyId = `agency-${Date.now()}`;
+      addAgency({
+        id: agencyId,
+        name: newAgencyName,
+        contactPerson: newAgencyContact,
+        phone: newAgencyPhone,
+        email: newAgencyEmail,
+        address: newAgencyAddress,
+        productsSupplied: [newName],
+      });
+    }
+
+    addProduct({
+      id: `prod-${Date.now()}`,
+      name: newName,
+      category: newCategory || "General",
+      price: Number(newPrice),
+      stock: Number(newStock),
+      minStock: Number(newMinStock) || 5,
+      image: newImage,
+      agencyIds: agencyId ? [agencyId] : [],
+    });
+
+    toast.success(`Product "${newName}" added!`);
+    resetAddForm();
+    setAddOpen(false);
+  };
+
+  const handleRestock = () => {
+    if (!restockId || !restockQty || Number(restockQty) <= 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    restockProduct(restockId, Number(restockQty));
+    toast.success("Stock updated!");
+    setRestockOpen(false);
+    setRestockQty("");
+    setRestockId("");
+  };
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold">Inventory</h1>
-        <p className="text-muted-foreground text-sm">Monitor stock levels and low-stock alerts</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold">Inventory</h1>
+          <p className="text-muted-foreground text-sm">Monitor stock levels and manage products</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setAddOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" /> Add Product
+          </Button>
+          <Button variant="outline" onClick={() => setRestockOpen(true)} className="gap-2">
+            <PackagePlus className="h-4 w-4" /> Restock
+          </Button>
+        </div>
       </div>
 
       {/* Low stock alert */}
@@ -40,6 +141,9 @@ const InventoryPage = () => {
                       <p className="text-xs text-muted-foreground">{supplier.phone}</p>
                     </div>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => { setRestockId(p.id); setRestockOpen(true); }}>
+                    Restock
+                  </Button>
                 </div>
               );
             })}
@@ -52,7 +156,16 @@ const InventoryPage = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50">
-              <tr><th className="text-left p-3">ID</th><th className="text-left p-3">Product</th><th className="text-left p-3">Category</th><th className="text-right p-3">Price</th><th className="text-right p-3">Stock</th><th className="text-right p-3">Min Stock</th><th className="text-left p-3">Status</th></tr>
+              <tr>
+                <th className="text-left p-3">ID</th>
+                <th className="text-left p-3">Product</th>
+                <th className="text-left p-3">Category</th>
+                <th className="text-right p-3">Price</th>
+                <th className="text-right p-3">Stock</th>
+                <th className="text-right p-3">Min Stock</th>
+                <th className="text-left p-3">Status</th>
+                <th className="text-right p-3">Action</th>
+              </tr>
             </thead>
             <tbody>
               {products.map((p, i) => (
@@ -65,12 +178,17 @@ const InventoryPage = () => {
                   <td className="p-3 text-right text-muted-foreground">{p.minStock}</td>
                   <td className="p-3">
                     {p.stock <= p.minStock ? (
-                      <Badge variant="destructive" className="text-xs">Low Stock</Badge>
+                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive">Low Stock</span>
                     ) : p.stock <= p.minStock * 2 ? (
-                      <Badge variant="secondary" className="text-xs bg-warning/20 text-warning-foreground">Warning</Badge>
+                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-accent text-accent-foreground">Warning</span>
                     ) : (
-                      <Badge variant="secondary" className="text-xs bg-success/20 text-success">In Stock</Badge>
+                      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-primary/10 text-primary">In Stock</span>
                     )}
+                  </td>
+                  <td className="p-3 text-right">
+                    <Button size="sm" variant="ghost" onClick={() => { setRestockId(p.id); setRestockOpen(true); }}>
+                      Restock
+                    </Button>
                   </td>
                 </motion.tr>
               ))}
@@ -78,6 +196,129 @@ const InventoryPage = () => {
           </table>
         </div>
       </div>
+
+      {/* Add Product Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Product</DialogTitle>
+            <DialogDescription>Fill in the product and supplier details below.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Product Name *</Label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Basmati Rice" />
+              </div>
+              <div className="space-y-1">
+                <Label>Category</Label>
+                <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="e.g. Grains" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label>Price (₹) *</Label>
+                <Input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="0" />
+              </div>
+              <div className="space-y-1">
+                <Label>Stock Qty *</Label>
+                <Input type="number" value={newStock} onChange={(e) => setNewStock(e.target.value)} placeholder="0" />
+              </div>
+              <div className="space-y-1">
+                <Label>Min Stock</Label>
+                <Input type="number" value={newMinStock} onChange={(e) => setNewMinStock(e.target.value)} placeholder="5" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Emoji Icon</Label>
+              <Input value={newImage} onChange={(e) => setNewImage(e.target.value)} placeholder="📦" />
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <Label className="text-base font-semibold">Supplier Details</Label>
+              <div className="flex gap-2 mt-2">
+                <Button size="sm" variant={supplierMode === "existing" ? "default" : "outline"} onClick={() => setSupplierMode("existing")}>Existing Supplier</Button>
+                <Button size="sm" variant={supplierMode === "new" ? "default" : "outline"} onClick={() => setSupplierMode("new")}>New Supplier</Button>
+              </div>
+
+              {supplierMode === "existing" ? (
+                <div className="mt-3">
+                  <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                    <SelectTrigger><SelectValue placeholder="Select a supplier" /></SelectTrigger>
+                    <SelectContent>
+                      {agencies.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Supplier Name *</Label>
+                      <Input value={newAgencyName} onChange={(e) => setNewAgencyName(e.target.value)} placeholder="Agency name" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Contact Person</Label>
+                      <Input value={newAgencyContact} onChange={(e) => setNewAgencyContact(e.target.value)} placeholder="Contact name" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Phone *</Label>
+                      <Input value={newAgencyPhone} onChange={(e) => setNewAgencyPhone(e.target.value)} placeholder="Phone number" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Email</Label>
+                      <Input value={newAgencyEmail} onChange={(e) => setNewAgencyEmail(e.target.value)} placeholder="Email" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Address</Label>
+                    <Input value={newAgencyAddress} onChange={(e) => setNewAgencyAddress(e.target.value)} placeholder="Address" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { resetAddForm(); setAddOpen(false); }}>Cancel</Button>
+            <Button onClick={handleAddProduct}>Add Product</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restock Dialog */}
+      <Dialog open={restockOpen} onOpenChange={setRestockOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Restock Product</DialogTitle>
+            <DialogDescription>Select a product and enter the quantity to add.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Product</Label>
+              <Select value={restockId} onValueChange={setRestockId}>
+                <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.image} {p.name} (Current: {p.stock})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Quantity to Add</Label>
+              <Input type="number" value={restockQty} onChange={(e) => setRestockQty(e.target.value)} placeholder="Enter quantity" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestockOpen(false)}>Cancel</Button>
+            <Button onClick={handleRestock}>Restock</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
