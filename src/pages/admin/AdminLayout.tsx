@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useStore } from "@/store/useStore";
-import { LayoutDashboard, Users, Package, Truck, BarChart3, TrendingUp, LogOut, Store, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Users, Package, Truck, BarChart3, TrendingUp, LogOut, Store, AlertTriangle, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,7 @@ const navItems = [
   { to: "/admin/workers", icon: Users, label: "Workers" },
   { to: "/admin/inventory", icon: Package, label: "Inventory" },
   { to: "/admin/suppliers", icon: Truck, label: "Suppliers" },
+  { to: "/admin/purchase-history", icon: History, label: "Purchase History" },
   { to: "/admin/daily-report", icon: BarChart3, label: "Daily Sales" },
   { to: "/admin/monthly-report", icon: TrendingUp, label: "Monthly Report" },
 ];

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ShoppingCart, Shield, Store } from "lucide-react";
+import { ShoppingCart, Shield, Store, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "@/store/useStore";
 import { useState } from "react";
@@ -12,9 +12,19 @@ import { toast } from "sonner";
 const Index = () => {
   const navigate = useNavigate();
   const setRole = useStore((s) => s.setRole);
+  const owners = useStore((s) => s.owners);
+  const addOwner = useStore((s) => s.addOwner);
   const [showLogin, setShowLogin] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // Signup fields
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPhone, setSignupPhone] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirm, setSignupConfirm] = useState("");
 
   const enterAsCustomer = () => {
     setRole("customer");
@@ -23,12 +33,36 @@ const Index = () => {
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === "admin@ugms.com" && password === "admin123") {
+    const found = owners.find((o) => o.email === email && o.password === password);
+    if (found) {
       setRole("admin");
       navigate("/admin");
+      toast.success(`Welcome back, ${found.name}!`);
     } else {
-      toast.error("Invalid credentials. Use admin@ugms.com / admin123");
+      toast.error("Invalid credentials. Please check your email and password.");
     }
+  };
+
+  const handleSignup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signupName.trim() || !signupEmail.trim() || !signupPhone.trim() || !signupPassword) {
+      toast.error("Please fill all fields"); return;
+    }
+    if (signupPassword.length < 6) {
+      toast.error("Password must be at least 6 characters"); return;
+    }
+    if (signupPassword !== signupConfirm) {
+      toast.error("Passwords do not match"); return;
+    }
+    if (owners.some((o) => o.email === signupEmail.trim())) {
+      toast.error("An account with this email already exists"); return;
+    }
+    addOwner({ name: signupName.trim(), email: signupEmail.trim(), phone: signupPhone.trim(), password: signupPassword });
+    toast.success("Account created! You can now login.");
+    setShowSignup(false);
+    setShowLogin(true);
+    setEmail(signupEmail.trim());
+    setSignupName(""); setSignupEmail(""); setSignupPhone(""); setSignupPassword(""); setSignupConfirm("");
   };
 
   return (
@@ -100,6 +134,7 @@ const Index = () => {
         </motion.p>
       </div>
 
+      {/* Login Dialog */}
       <Dialog open={showLogin} onOpenChange={setShowLogin}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -117,6 +152,49 @@ const Index = () => {
             </div>
             <Button type="submit" className="w-full">Sign In</Button>
           </form>
+          <div className="text-center mt-2">
+            <Button variant="link" className="text-sm" onClick={() => { setShowLogin(false); setShowSignup(true); }}>
+              <UserPlus className="h-4 w-4 mr-1" /> Don't have an account? Sign Up
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Signup Dialog */}
+      <Dialog open={showSignup} onOpenChange={setShowSignup}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Create Owner Account</DialogTitle>
+            <DialogDescription>Register as a new shop owner.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSignup} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label>Full Name *</Label>
+              <Input value={signupName} onChange={(e) => setSignupName(e.target.value)} placeholder="Your full name" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Email *</Label>
+              <Input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} placeholder="you@example.com" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone Number *</Label>
+              <Input value={signupPhone} onChange={(e) => setSignupPhone(e.target.value)} placeholder="9876543210" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Create Password *</Label>
+              <Input type="password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} placeholder="Min 6 characters" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm Password *</Label>
+              <Input type="password" value={signupConfirm} onChange={(e) => setSignupConfirm(e.target.value)} placeholder="Re-enter password" required />
+            </div>
+            <Button type="submit" className="w-full">Create Account</Button>
+          </form>
+          <div className="text-center mt-2">
+            <Button variant="link" className="text-sm" onClick={() => { setShowSignup(false); setShowLogin(true); }}>
+              Already have an account? Sign In
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
