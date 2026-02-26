@@ -1,7 +1,8 @@
-import { useStore } from "@/store/useStore";
 import { motion } from "framer-motion";
-import { Users, Package, AlertTriangle, DollarSign, TrendingUp, ShoppingCart } from "lucide-react";
+import { Users, Package, AlertTriangle, TrendingUp, ShoppingCart } from "lucide-react";
 import { dailySales, monthlyReport } from "@/data/mockData";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const StatCard = ({ icon: Icon, label, value, sub, color }: { icon: any; label: string; value: string; sub?: string; color: string }) => (
   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl bg-card shadow-card border border-border p-5">
@@ -19,15 +20,16 @@ const StatCard = ({ icon: Icon, label, value, sub, color }: { icon: any; label: 
 );
 
 const AdminDashboard = () => {
-  const workers = useStore((s) => s.workers);
-  const products = useStore((s) => s.products);
-  const invoices = useStore((s) => s.invoices);
-  const agencies = useStore((s) => s.agencies);
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  const lowStock = products.filter((p) => p.stock <= p.minStock);
-  const totalAttendance = workers.length > 0
-    ? Math.round(workers.reduce((s, w) => s + (w.daysPresent / (w.daysPresent + w.daysAbsent)) * 100, 0) / workers.length)
-    : 0;
+  const lowStock = products.filter((p) => p.stock <= p.min_stock);
   const todaySales = dailySales[dailySales.length - 1];
 
   return (
@@ -38,13 +40,12 @@ const AdminDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Total Workers" value={String(workers.length)} sub={`${totalAttendance}% avg attendance`} color="gradient-primary" />
         <StatCard icon={Package} label="Total Products" value={String(products.length)} sub={`${lowStock.length} low stock`} color="bg-info" />
         <StatCard icon={ShoppingCart} label="Today's Bills" value={String(todaySales.billCount)} sub={`₹${todaySales.totalAmount.toLocaleString()}`} color="gradient-accent" />
         <StatCard icon={TrendingUp} label="Monthly Profit" value={`₹${monthlyReport.netProfit.toLocaleString()}`} sub="This month" color="bg-success" />
+        <StatCard icon={Users} label="Low Stock Items" value={String(lowStock.length)} sub="Need restocking" color="gradient-primary" />
       </div>
 
-      {/* Low Stock Alerts */}
       {lowStock.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -52,24 +53,19 @@ const AdminDashboard = () => {
             <h2 className="font-display font-bold text-destructive">Low Stock Alerts</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {lowStock.map((p) => {
-              const supplier = agencies.find((a) => p.agencyIds.includes(a.id));
-              return (
-                <div key={p.id} className="flex items-center gap-3 bg-card rounded-lg p-3 border border-border">
-                  <span className="text-2xl">{p.image}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{p.name}</p>
-                    <p className="text-xs text-destructive font-medium">Stock: {p.stock} (min: {p.minStock})</p>
-                    {supplier && <p className="text-xs text-muted-foreground">Order from: {supplier.name}</p>}
-                  </div>
+            {lowStock.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 bg-card rounded-lg p-3 border border-border">
+                <span className="text-2xl">{p.image_url || "📦"}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{p.name}</p>
+                  <p className="text-xs text-destructive font-medium">Stock: {p.stock} (min: {p.min_stock})</p>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </motion.div>
       )}
 
-      {/* Recent Sales */}
       <div className="rounded-xl bg-card shadow-card border border-border p-5">
         <h2 className="font-display font-bold mb-4">Recent Daily Sales</h2>
         <div className="overflow-x-auto">

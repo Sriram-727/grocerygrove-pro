@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useStore } from "@/store/useStore";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Search, Plus, Minus, Trash2, ArrowLeft, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,40 +6,63 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Tables } from "@/integrations/supabase/types";
+
+type Product = Tables<"products">;
+interface CartItem { product: Product; quantity: number; }
+interface InvoiceItem { name: string; quantity: number; price: number; }
 
 const categories = ["All", "Grains", "Pulses", "Oils", "Essentials", "Beverages", "Dairy", "Bakery", "Vegetables"];
 
 const ShopPage = () => {
   const navigate = useNavigate();
-  const { products, cart, addToCart, removeFromCart, updateCartQuantity, clearCart, updateProductStock, addInvoice, setRole } = useStore();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [showCart, setShowCart] = useState(false);
-  const [showInvoice, setShowInvoice] = useState<null | ReturnType<typeof generateInvoice>>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [showInvoice, setShowInvoice] = useState<null | { id: string; date: string; items: InvoiceItem[]; subtotal: number; gst: number; total: number }>(null);
+
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const updateStockMutation = useMutation({
+    mutationFn: async ({ id, newStock }: { id: string; newStock: number }) => {
+      const { error } = await supabase.from("products").update({ stock: newStock }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["products"] }),
+  });
 
   const filtered = products.filter(
-    (p) =>
-      (category === "All" || p.category === category) &&
-      p.name.toLowerCase().includes(search.toLowerCase())
+    (p) => (category === "All" || p.category === category) && p.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const cartTotal = cart.reduce((s, c) => s + c.product.price * c.quantity, 0);
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
 
-  function generateInvoice() {
-    const inv = {
-      id: "INV-" + Date.now().toString(36).toUpperCase(),
-      date: new Date().toLocaleString(),
-      items: cart.map((c) => ({ name: c.product.name, quantity: c.quantity, price: c.product.price })),
-      subtotal: cartTotal,
-      gst: Math.round(cartTotal * 0.05),
-      total: Math.round(cartTotal * 1.05),
-    };
-    return inv;
-  }
+  const addToCart = (product: Product) => {
+    setCart((prev) => {
+      const existing = prev.find((c) => c.product.id === product.id);
+      if (existing) return prev.map((c) => c.product.id === product.id ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...prev, { product, quantity: 1 }];
+    });
+  };
+  const removeFromCart = (id: string) => setCart((prev) => prev.filter((c) => c.product.id !== id));
+  const updateCartQuantity = (id: string, qty: number) => {
+    if (qty < 1) return;
+    setCart((prev) => prev.map((c) => c.product.id === id ? { ...c, quantity: qty } : c));
+  };
 
-  const handleCheckout = () => {
-    // Check stock
+  const handleCheckout = async () => {
     for (const item of cart) {
       const prod = products.find((p) => p.id === item.product.id);
       if (!prod || prod.stock < item.quantity) {
@@ -48,41 +70,50 @@ const ShopPage = () => {
         return;
       }
     }
-    const inv = generateInvoice();
-    cart.forEach((c) => updateProductStock(c.product.id, c.quantity));
-    addInvoice(inv);
+    const inv = {
+      id: "INV-" + Date.now().toString(36).toUpperCase(),
+      date: new Date().toLocaleString(),
+      items: cart.map((c) => ({ name: c.product.name, quantity: c.quantity, price: Number(c.product.price) })),
+      subtotal: cartTotal,
+      gst: Math.round(cartTotal * 0.05),
+      total: Math.round(cartTotal * 1.05),
+    };
+
+    // Update stock in DB
+    for (const item of cart) {
+      const prod = products.find((p) => p.id === item.product.id);
+      if (prod) {
+        await updateStockMutation.mutateAsync({ id: prod.id, newStock: prod.stock - item.quantity });
+      }
+    }
+
     setShowInvoice(inv);
-    clearCart();
+    setCart([]);
     setShowCart(false);
     toast.success("Order placed successfully!");
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-md border-b border-border">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => { setRole("none"); navigate("/"); }}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <Store className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-display font-bold">UGMS Shop</h1>
           </div>
           <Button variant="outline" className="relative" onClick={() => setShowCart(!showCart)}>
-            <ShoppingCart className="h-5 w-5 mr-2" />
-            Cart
+            <ShoppingCart className="h-5 w-5 mr-2" /> Cart
             {cartCount > 0 && (
-              <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                {cartCount}
-              </Badge>
+              <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs">{cartCount}</Badge>
             )}
           </Button>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {/* Search & Filters */}
         <div className="mb-6 space-y-4">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -90,54 +121,32 @@ const ShopPage = () => {
           </div>
           <div className="flex gap-2 flex-wrap">
             {categories.map((cat) => (
-              <Button key={cat} variant={category === cat ? "default" : "secondary"} size="sm" onClick={() => setCategory(cat)}>
-                {cat}
-              </Button>
+              <Button key={cat} variant={category === cat ? "default" : "secondary"} size="sm" onClick={() => setCategory(cat)}>{cat}</Button>
             ))}
           </div>
         </div>
 
-        {/* Products Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filtered.map((product, i) => {
             const inCart = cart.find((c) => c.product.id === product.id);
             return (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="rounded-xl border border-border bg-card shadow-card p-4 flex flex-col"
-              >
-                <div className="text-5xl text-center mb-3">{product.image}</div>
+              <motion.div key={product.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} className="rounded-xl border border-border bg-card shadow-card p-4 flex flex-col">
+                <div className="text-5xl text-center mb-3">{product.image_url || "📦"}</div>
                 <h3 className="font-semibold text-sm leading-tight">{product.name}</h3>
                 <p className="text-xs text-muted-foreground mb-1">{product.category}</p>
                 <div className="flex items-center justify-between mt-auto pt-2">
                   <span className="font-bold text-primary">₹{product.price}</span>
-                  <span className={`text-xs ${product.stock <= product.minStock ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                    Stock: {product.stock}
-                  </span>
+                  <span className={`text-xs ${product.stock <= product.min_stock ? "text-destructive font-medium" : "text-muted-foreground"}`}>Stock: {product.stock}</span>
                 </div>
                 {inCart ? (
                   <div className="flex items-center gap-2 mt-3">
-                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateCartQuantity(product.id, inCart.quantity - 1)}>
-                      <Minus className="h-3 w-3" />
-                    </Button>
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => updateCartQuantity(product.id, inCart.quantity - 1)}><Minus className="h-3 w-3" /></Button>
                     <span className="font-medium text-sm w-6 text-center">{inCart.quantity}</span>
-                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => {
-                      if (inCart.quantity >= product.stock) { toast.error("Max stock reached"); return; }
-                      updateCartQuantity(product.id, inCart.quantity + 1);
-                    }}>
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                    <Button size="icon" variant="destructive" className="h-8 w-8 ml-auto" onClick={() => removeFromCart(product.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { if (inCart.quantity >= product.stock) { toast.error("Max stock reached"); return; } updateCartQuantity(product.id, inCart.quantity + 1); }}><Plus className="h-3 w-3" /></Button>
+                    <Button size="icon" variant="destructive" className="h-8 w-8 ml-auto" onClick={() => removeFromCart(product.id)}><Trash2 className="h-3 w-3" /></Button>
                   </div>
                 ) : (
-                  <Button size="sm" className="mt-3 w-full" onClick={() => { if (product.stock === 0) { toast.error("Out of stock"); return; } addToCart(product); }} disabled={product.stock === 0}>
-                    <Plus className="h-4 w-4 mr-1" /> Add
-                  </Button>
+                  <Button size="sm" className="mt-3 w-full" onClick={() => { if (product.stock === 0) { toast.error("Out of stock"); return; } addToCart(product); }} disabled={product.stock === 0}><Plus className="h-4 w-4 mr-1" /> Add</Button>
                 )}
               </motion.div>
             );
@@ -150,13 +159,7 @@ const ShopPage = () => {
         {showCart && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-foreground/20 z-40" onClick={() => setShowCart(false)} />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25 }}
-              className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card z-50 border-l border-border shadow-elevated flex flex-col"
-            >
+            <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25 }} className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-card z-50 border-l border-border shadow-elevated flex flex-col">
               <div className="p-4 border-b border-border flex items-center justify-between">
                 <h2 className="text-lg font-display font-bold">Shopping Cart</h2>
                 <Button variant="ghost" size="sm" onClick={() => setShowCart(false)}>Close</Button>
@@ -165,15 +168,13 @@ const ShopPage = () => {
                 {cart.length === 0 && <p className="text-muted-foreground text-center py-8">Your cart is empty</p>}
                 {cart.map((item) => (
                   <div key={item.product.id} className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
-                    <span className="text-2xl">{item.product.image}</span>
+                    <span className="text-2xl">{item.product.image_url || "📦"}</span>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{item.product.name}</p>
                       <p className="text-sm text-muted-foreground">₹{item.product.price} × {item.quantity}</p>
                     </div>
-                    <span className="font-bold text-sm">₹{item.product.price * item.quantity}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeFromCart(item.product.id)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <span className="font-bold text-sm">₹{Number(item.product.price) * item.quantity}</span>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeFromCart(item.product.id)}><Trash2 className="h-3 w-3" /></Button>
                   </div>
                 ))}
               </div>
@@ -195,12 +196,7 @@ const ShopPage = () => {
         {showInvoice && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-foreground/30 z-50" onClick={() => setShowInvoice(null)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:max-w-lg md:w-full bg-card rounded-2xl z-50 shadow-elevated overflow-auto max-h-[90vh] p-6"
-            >
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:max-w-lg md:w-full bg-card rounded-2xl z-50 shadow-elevated overflow-auto max-h-[90vh] p-6">
               <div className="text-center mb-6">
                 <Store className="h-8 w-8 text-primary mx-auto mb-2" />
                 <h2 className="text-xl font-display font-bold">UGMS Invoice</h2>
@@ -220,7 +216,7 @@ const ShopPage = () => {
                 <div className="flex justify-between font-bold text-base pt-2 border-t border-border"><span>Total</span><span className="text-primary">₹{showInvoice.total}</span></div>
               </div>
               <div className="flex gap-3 mt-6">
-                <Button variant="outline" className="flex-1" onClick={() => { window.print(); }}>Print</Button>
+                <Button variant="outline" className="flex-1" onClick={() => window.print()}>Print</Button>
                 <Button className="flex-1" onClick={() => setShowInvoice(null)}>Done</Button>
               </div>
             </motion.div>
