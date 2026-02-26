@@ -1,8 +1,10 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useStore } from "@/store/useStore";
+import { useAuth } from "@/hooks/useAuth";
 import { LayoutDashboard, Users, Package, Truck, BarChart3, TrendingUp, LogOut, Store, AlertTriangle, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
@@ -16,13 +18,26 @@ const navItems = [
 
 const AdminLayout = () => {
   const navigate = useNavigate();
-  const setRole = useStore((s) => s.setRole);
-  const products = useStore((s) => s.products);
-  const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
+  const { signOut, user } = useAuth();
+
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const lowStockCount = products.filter((p) => p.stock <= p.min_stock).length;
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <div className="flex min-h-screen w-full">
-      {/* Sidebar */}
       <aside className="w-64 gradient-hero border-r border-sidebar-border flex flex-col shrink-0">
         <div className="p-5 flex items-center gap-3">
           <Store className="h-7 w-7" style={{ color: "hsl(152, 55%, 45%)" }} />
@@ -58,17 +73,19 @@ const AdminLayout = () => {
           ))}
         </nav>
         <div className="p-3 mt-auto">
+          <p className="text-xs px-3 mb-2 truncate" style={{ color: "hsl(140, 15%, 50%)" }}>
+            {user?.email}
+          </p>
           <Button
             variant="ghost"
             className="w-full justify-start text-sidebar-foreground/60 hover:text-sidebar-foreground"
-            onClick={() => { setRole("none"); navigate("/"); }}
+            onClick={handleLogout}
           >
             <LogOut className="h-4 w-4 mr-2" /> Logout
           </Button>
         </div>
       </aside>
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto">
         <Outlet />
       </main>
