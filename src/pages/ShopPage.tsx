@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
+import { useAuth } from "@/hooks/useAuth";
 
 type Product = Tables<"products">;
 interface CartItem { product: Product; quantity: number; }
@@ -19,6 +20,7 @@ const categories = ["All", "Grains", "Pulses", "Oils", "Essentials", "Beverages"
 const ShopPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [showCart, setShowCart] = useState(false);
@@ -46,7 +48,7 @@ const ShopPage = () => {
     (p) => (category === "All" || p.category === category) && p.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const cartTotal = cart.reduce((s, c) => s + c.product.price * c.quantity, 0);
+  const cartTotal = cart.reduce((s, c) => s + Number(c.product.price) * c.quantity, 0);
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
 
   const addToCart = (product: Product) => {
@@ -70,14 +72,11 @@ const ShopPage = () => {
         return;
       }
     }
-    const inv = {
-      id: "INV-" + Date.now().toString(36).toUpperCase(),
-      date: new Date().toLocaleString(),
-      items: cart.map((c) => ({ name: c.product.name, quantity: c.quantity, price: Number(c.product.price) })),
-      subtotal: cartTotal,
-      gst: Math.round(cartTotal * 0.05),
-      total: Math.round(cartTotal * 1.05),
-    };
+    const subtotal = cartTotal;
+    const gst = Math.round(subtotal * 0.05);
+    const total = Math.round(subtotal * 1.05);
+    const invoiceNumber = "INV-" + Date.now().toString(36).toUpperCase();
+    const items = cart.map((c) => ({ name: c.product.name, quantity: c.quantity, price: Number(c.product.price) }));
 
     // Update stock in DB
     for (const item of cart) {
@@ -87,7 +86,27 @@ const ShopPage = () => {
       }
     }
 
-    setShowInvoice(inv);
+    // Save invoice to DB if logged in
+    if (user) {
+      const { error } = await supabase.from("invoices").insert({
+        invoice_number: invoiceNumber,
+        user_id: user.id,
+        items: items as any,
+        subtotal,
+        gst,
+        total,
+      });
+      if (error) console.error("Failed to save invoice:", error);
+    }
+
+    setShowInvoice({
+      id: invoiceNumber,
+      date: new Date().toLocaleString(),
+      items,
+      subtotal,
+      gst,
+      total,
+    });
     setCart([]);
     setShowCart(false);
     toast.success("Order placed successfully!");

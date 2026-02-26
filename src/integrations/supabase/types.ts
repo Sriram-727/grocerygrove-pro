@@ -52,6 +52,39 @@ export type Database = {
           },
         ]
       }
+      invoices: {
+        Row: {
+          created_at: string
+          gst: number
+          id: string
+          invoice_number: string
+          items: Json
+          subtotal: number
+          total: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gst?: number
+          id?: string
+          invoice_number: string
+          items?: Json
+          subtotal?: number
+          total?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gst?: number
+          id?: string
+          invoice_number?: string
+          items?: Json
+          subtotal?: number
+          total?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           category: string
